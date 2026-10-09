@@ -1,0 +1,1004 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>PO → Sale Sheet Generator</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://cdn.jsdelivr.net/npm/mammoth@1.7.2/mammoth.browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script>window.ExcelJS||document.write('<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"><\/script>')</script>
+<style>
+  :root{
+    --bg:#12161c;
+    --panel:#1a2028;
+    --panel-2:#212934;
+    --line:#2d3742;
+    --ink:#e8ecf1;
+    --ink-dim:#8c98a8;
+    --brass:#c9a227;
+    --brass-dim:#8a712a;
+    --good:#4fa88f;
+    --bad:#c05a4a;
+    --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    --sans: "Segoe UI", -apple-system, Roboto, Helvetica, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: light){
+    :root:not([data-theme="dark"]){
+      --bg:#f2f1ec; --panel:#ffffff; --panel-2:#f7f6f1; --line:#d8d5cb;
+      --ink:#1c2126; --ink-dim:#5b6673;
+    }
+  }
+  :root[data-theme="light"]{
+    --bg:#f2f1ec; --panel:#ffffff; --panel-2:#f7f6f1; --line:#d8d5cb;
+    --ink:#1c2126; --ink-dim:#5b6673;
+  }
+  *{box-sizing:border-box;}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);margin:0;padding:0 0 80px;}
+  .wrap{max-width:1180px;margin:0 auto;padding:32px 20px 0;}
+  header.top{display:flex;align-items:baseline;justify-content:space-between;border-bottom:2px solid var(--brass);padding-bottom:14px;margin-bottom:26px;flex-wrap:wrap;gap:8px;}
+  header.top h1{font-size:21px;letter-spacing:.2px;margin:0;font-weight:650;}
+  header.top h1 span{color:var(--brass);}
+  header.top .tag{font-family:var(--mono);font-size:12px;color:var(--ink-dim);}
+  .stage{display:flex;align-items:center;gap:10px;margin-bottom:18px;}
+  .stage .num{width:24px;height:24px;border-radius:50%;background:var(--panel-2);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:12px;color:var(--ink-dim);flex:none;}
+  .stage.active .num{background:var(--brass);color:#1a1500;border-color:var(--brass);}
+  .stage h2{font-size:15px;margin:0;font-weight:600;}
+  .stage .sub{font-size:12.5px;color:var(--ink-dim);margin-left:auto;}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:20px;margin-bottom:30px;}
+  .tabs{display:flex;gap:2px;margin-bottom:16px;border-bottom:1px solid var(--line);}
+  .tab-btn{background:none;border:none;color:var(--ink-dim);padding:9px 16px;font-size:13.5px;cursor:pointer;border-bottom:2px solid transparent;font-family:var(--sans);}
+  .tab-btn.active{color:var(--ink);border-bottom-color:var(--brass);}
+  .tab-body{display:none;}
+  .tab-body.active{display:block;}
+  .paste-zone{min-height:150px;max-height:320px;overflow:auto;background:var(--panel-2);border:1px dashed var(--line);border-radius:5px;padding:14px;font-size:13px;line-height:1.5;color:var(--ink-dim);}
+  .paste-zone:focus{outline:1px solid var(--brass);color:var(--ink);}
+  .paste-zone table{border-collapse:collapse;font-size:12px;}
+  .paste-zone td,.paste-zone th{border:1px solid var(--line);padding:2px 6px;}
+  .drop{border:1.5px dashed var(--line);border-radius:5px;padding:26px;text-align:center;color:var(--ink-dim);font-size:13.5px;cursor:pointer;transition:border-color .15s;}
+  .drop:hover,.drop.drag{border-color:var(--brass);color:var(--ink);}
+  .drop input{display:none;}
+  .fname{font-family:var(--mono);font-size:12px;color:var(--good);margin-top:8px;}
+  .row{display:flex;gap:14px;flex-wrap:wrap;}
+  .btn{background:var(--brass);color:#1a1500;border:none;border-radius:4px;padding:10px 18px;font-size:13.5px;font-weight:600;cursor:pointer;font-family:var(--sans);}
+  .btn:hover{filter:brightness(1.08);}
+  .btn:disabled{opacity:.4;cursor:not-allowed;}
+  .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--ink);}
+  .btn.ghost:hover{border-color:var(--brass);}
+  .btn.small{padding:6px 12px;font-size:12px;}
+  .field{display:flex;flex-direction:column;gap:5px;margin-bottom:14px;}
+  .field label{font-size:11.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-dim);}
+  .field input,.field select{background:var(--panel-2);border:1px solid var(--line);color:var(--ink);padding:8px 10px;border-radius:4px;font-size:13.5px;font-family:var(--mono);}
+  .field input:focus,.field select:focus{outline:none;border-color:var(--brass);}
+  .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
+  @media(max-width:800px){.grid4{grid-template-columns:repeat(2,1fr);}.grid3{grid-template-columns:repeat(2,1fr);}}
+  .block-picker{display:flex;flex-direction:column;gap:8px;margin-bottom:16px;}
+  .block-opt{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:5px;cursor:pointer;background:var(--panel-2);}
+  .block-opt.sel{border-color:var(--brass);background:rgba(201,162,39,.08);}
+  .block-opt .t{font-weight:600;font-size:13.5px;}
+  .block-opt .d{font-size:12px;color:var(--ink-dim);font-family:var(--mono);}
+  table.charges{width:100%;border-collapse:collapse;font-size:13px;}
+  table.charges th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--ink-dim);padding:6px 8px;border-bottom:1px solid var(--line);font-weight:600;}
+  table.charges td{padding:5px 8px;border-bottom:1px solid var(--line);vertical-align:middle;}
+  table.charges tr:last-child td{border-bottom:none;}
+  table.charges input{width:100%;background:var(--panel-2);border:1px solid var(--line);color:var(--ink);padding:6px 7px;border-radius:4px;font-family:var(--mono);font-size:13px;}
+  table.charges input:focus{outline:none;border-color:var(--brass);}
+  table.charges .unit{color:var(--ink-dim);font-size:11.5px;white-space:nowrap;}
+  table.charges .src{font-size:10.5px;font-family:var(--mono);}
+  .src.matched{color:var(--good);}
+  .src.manual{color:var(--ink-dim);}
+  .src.computed{color:var(--brass);}
+  table.preview{width:100%;border-collapse:collapse;font-size:12.5px;font-family:var(--mono);}
+  table.preview th{background:var(--panel-2);text-align:left;padding:6px 8px;border:1px solid var(--line);font-family:var(--sans);font-size:11px;text-transform:uppercase;color:var(--ink-dim);}
+  table.preview td{padding:5px 8px;border:1px solid var(--line);}
+  table.preview td.num{text-align:right;}
+  table.preview tr.total td{font-weight:700;border-top:2px solid var(--brass);}
+  .preview-wrap{overflow-x:auto;}
+  .msg{font-size:12.5px;padding:10px 12px;border-radius:4px;margin-bottom:14px;}
+  .msg.err{background:rgba(192,90,74,.12);color:var(--bad);border:1px solid rgba(192,90,74,.35);}
+  .msg.ok{background:rgba(79,168,143,.12);color:var(--good);border:1px solid rgba(79,168,143,.35);}
+  .msg.warn{background:rgba(201,162,39,.12);color:var(--brass);border:1px solid rgba(201,162,39,.4);}
+  .msg.info{background:var(--panel-2);color:var(--ink-dim);border:1px solid var(--line);}
+  .msg ul{margin:6px 0 0 18px;padding:0;}
+  table.flagtbl{width:100%;margin-top:10px;border-collapse:collapse;}
+  table.flagtbl td{padding:8px 6px;border-top:1px solid rgba(192,90,74,.3);vertical-align:top;color:var(--ink);}
+  table.flagtbl select{width:100%;background:var(--panel-2);color:var(--ink);border:1px solid var(--line);padding:7px;border-radius:4px;font-size:13px;}
+  .tagk,.tagn{font-size:10px;text-transform:uppercase;letter-spacing:.4px;padding:1px 6px;border-radius:3px;margin-left:6px;}
+  .tagk{background:var(--panel-2);color:var(--ink-dim);} .tagn{background:var(--bad);color:#fff;}
+  .note{font-size:11.5px;color:var(--ink-dim);margin-top:4px;}
+  .titlebar{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px;}
+  .titlebar h3{margin:0;font-size:15px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>PO <span>→</span> Stock &amp; Sale Sheet</h1>
+    <div class="tag" id="statusTag">step 1 of 3</div>
+  </header>
+
+  <!-- STEP 1: INPUT -->
+  <div class="stage active"><div class="num">1</div><h2>Bring in the PO confirmation</h2><div class="sub">paste, or upload the Word / Outlook file</div></div>
+  <div class="panel">
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="paste">Paste email</button>
+      <button class="tab-btn" data-tab="docx">Upload Word (.docx)</button>
+      <button class="tab-btn" data-tab="msg">Upload Outlook (.msg)</button>
+    </div>
+
+    <div class="tab-body active" id="tab-paste">
+      <div class="paste-zone" id="pasteZone" contenteditable="true" data-placeholder="true">Select the PO confirmation in Outlook or Word (including the Vessel Name / Line-Item table), copy it, then click here and paste (Ctrl+V). Table formatting is kept automatically.</div>
+      <div class="row" style="margin-top:12px;">
+        <button class="btn" id="parsePasteBtn">Extract charges</button>
+        <button class="btn ghost small" id="clearPasteBtn">Clear</button>
+      </div>
+    </div>
+
+    <div class="tab-body" id="tab-docx">
+      <label class="drop" id="dropDocx">
+        <input type="file" id="fileDocx" accept=".docx">
+        Drop the <strong>Final PO .docx</strong> here, or click to choose a file
+        <div class="fname" id="docxName"></div>
+      </label>
+    </div>
+
+    <div class="tab-body" id="tab-msg">
+      <label class="drop" id="dropMsg">
+        <input type="file" id="fileMsg" accept=".msg">
+        Drop the Outlook <strong>.msg</strong> here, or click to choose a file
+        <div class="fname" id="msgName"></div>
+      </label>
+      <div class="note">Reads the message body directly (no Outlook needed). If a particular .msg won't parse, use "Paste email" instead — select the mail body in Outlook, copy, and paste it there.</div>
+    </div>
+
+    <div id="parseMsgBox"></div>
+  </div>
+
+  <!-- BLOCK PICKER (hidden until needed) -->
+  <div id="blockPickerSection" style="display:none;">
+    <div class="stage active"><div class="num">·</div><h2>Which line item block?</h2><div class="sub">the source had more than one cargo / grade block</div></div>
+    <div class="panel">
+      <div class="block-picker" id="blockPicker"></div>
+    </div>
+  </div>
+
+  <!-- STEP 2: CHARGES + CONFIG -->
+  <div id="step2Section" style="display:none;">
+    <div class="stage active"><div class="num">2</div><h2>Check the charges &amp; set rake basis</h2><div class="sub">everything below is editable</div></div>
+    <div class="panel">
+      <div id="reviewBox"></div>
+      <div class="titlebar"><h3>Rs/Mt charges (from the PO)</h3></div>
+      <table class="charges">
+        <thead><tr><th style="width:36px;">#</th><th>Line item</th><th style="width:90px;">Unit</th><th style="width:150px;">Rate</th><th style="width:90px;">Source</th></tr></thead>
+        <tbody id="chargesBody"></tbody>
+      </table>
+
+      <div class="titlebar" style="margin-top:26px;"><h3>Rake &amp; shipment basis</h3></div>
+      <div class="grid4">
+        <div class="field"><label>Vessel name</label><input id="cfgVessel" type="text" value="MV GCL Narmada"></div>
+        <div class="field"><label>Sheet / route tab</label><input id="cfgSheet" type="text" value="TSL TO NINL"></div>
+        <div class="field"><label>No. of rakes planned *</label><input id="cfgRakes" type="number" min="1" step="1" placeholder="enter a value"></div>
+        <div class="field"><label>GST %</label><input id="cfgGst" type="number" step="0.01" value="18"></div>
+        <div class="field"><label>Rake tonnage (per rake, apprx.)</label><input id="cfgTonnage" type="number" step="0.01" value="3894"></div>
+        <div class="field"><label>No. of boxes (per rake)</label><input id="cfgBoxes" type="number" value="59"></div>
+        <div class="field"><label>Siding chgs (Rs / Mt)</label><input id="cfgSiding" type="number" step="0.01" value="4.59"></div>
+        <div class="field"><label>Haulage chgs (Rs / box)</label><input id="cfgHaulage" type="number" step="0.01" value="2330"></div>
+        <div class="field"><label>Terminal chgs (Rs / Mt)</label><input id="cfgTerminal" type="number" step="0.01" value="31.19"></div>
+      </div>
+      <div class="note">Application Fee &amp; User Fee are set once, in the charges table above. The footer "Basis N Rakes" note and the Application Fee quantity both follow the rake count you enter here — no need to repeat it.</div>
+      <div class="row" style="margin-top:14px;">
+        <button class="btn" id="buildBtn">Build sheet</button>
+      </div>
+      <div id="buildMsgBox"></div>
+    </div>
+  </div>
+
+  <!-- STEP 3: PREVIEW + DOWNLOAD -->
+  <div id="step3Section" style="display:none;">
+    <div class="stage active"><div class="num">3</div><h2>Preview &amp; download</h2><div class="sub" id="grandTotalTag"></div></div>
+    <div class="panel">
+      <div class="row" style="margin-bottom:16px;">
+        <button class="btn" id="downloadBtn">Download Excel (.xlsx)</button>
+        <button class="btn ghost" id="backBtn">← Edit again</button>
+      </div>
+      <div id="handledBox"></div>
+      <div class="preview-wrap"><table class="preview" id="previewTable"></table></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function(){
+
+/* ============================================================
+   0. CANONICAL LINE ITEM DEFINITION
+   ============================================================ */
+const LINE_ITEMS = [
+  {key:'shore_incentive',   label:'Shore Incentive Chgs',                      unit:'Rs/Mt',            src:'manual', dflt:0},
+  {key:'wharfage',          label:'Wharfage Charges',                          unit:'Rs/Mt',            src:'manual', dflt:0},
+  {key:'handling',          label:'Handling Charges / Port Service Charge',    unit:'Rs/Mt',            src:'manual', dflt:0},
+  {key:'tmill_supervision', label:'TMILL Supervision Chgs',                    unit:'Rs/Mt',            src:'manual', dflt:0},
+  {key:'diesel_escalation', label:'Diesel Escalation  Chgs ',                  unit:'Rs/Mt',            src:'manual', dflt:0},
+  {key:'port_royalty',      label:'Port Royalty Chgs',                         unit:'Rs/Mt',            src:'manual', dflt:0},
+  {key:'priority',          label:'Priority Charges',                          unit:'Rs/Mt',            src:'manual', dflt:0},
+  {key:'cargo_shift_ns',    label:'Cargo Shifting from non siding to siding',  unit:'Rs/Mt',            src:'manual', dflt:0},
+  {key:'plot_rent',         label:'Plot Rent Charges',                         unit:'Rs/Mt',            src:'manual', dflt:0},
+  {key:'hmc',               label:'HMC Charges ',                              unit:'Rs/Mt',            src:'manual', dflt:0},
+  {key:'survey_other',      label:'Survey & Other Charges',                    unit:'Rs/Mt',            src:'computed', dflt:0},
+  {key:'security',          label:'Security Charges',                          unit:'Rs/Mt',            src:'manual', dflt:0},
+  {key:'additional_shift',  label:'Additional Shifting & Loading Charges',     unit:'Rs/Mt',            src:'manual', dflt:0},
+  {key:'mls_da',            label:'MLS PORT DA (M.DUES)',                      unit:'Rs/Mt',            src:'manual', dflt:0},
+  {key:'mls_da_reimb',      label:'MLS PORT DA\u00a0 REIMBUREMENT (ILH & OTHERS)', unit:'Rs/Mt',       src:'manual', dflt:0},
+  {key:'customs_cha',       label:'Custom Clearing/ CHA Charges',              unit:'Rs/Mt',            src:'manual', dflt:0},
+  {key:'application_fee',   label:'Application Fee @Mining Charges',           unit:'Per Application',  src:'manual', dflt:100},
+  {key:'user_fee',          label:'User Fee @Mining Charges',                  unit:'Rs/Mt',            src:'manual', dflt:3},
+  {key:'haulage_siding_terminal', label:'HAULAGE/SIDING/TERMINAL',             unit:'Per Rake',         src:'computed', dflt:0}
+];
+// Fields that appear in the mail but have NO row in the sheet. They are recognised
+// (so we don't call them "new") but they still can't be silently dropped when they carry a value.
+const KNOWN_NO_ROW = {};   // none now: Port Royalty and Priority are separate rows and are never merged
+// Rows that never come from the mail (fixed / computed here)
+const NOT_FROM_MAIL = ['application_fee','user_fee','haulage_siding_terminal'];
+const SURVEY_SUB = ['survey_draft','survey_discharge','survey_rake_loading'];
+
+// normalize helper
+function norm(s){
+  return (s||'').replace(/\u00a0/g,' ').replace(/[\u2010-\u2015]/g,'-').replace(/\s+/g,' ').trim().toLowerCase();
+}
+function normKey(s){ return norm(s).replace(/[.:]+$/,'').replace(/\s*\/\s*/g,'/'); }
+
+// substring matchers -> canonical key (checked in order, first match wins)
+const MATCHERS = [
+  ['shore_incentive','shore incentive'],
+  ['wharfage','wharfage'],
+  ['handling','handling charges'],
+  ['tmill_supervision','tmill supervision'],
+  ['diesel_escalation','diesel escalation'],
+  ['port_royalty','port royalty'],
+  ['cargo_shift_ns','cargo shifting from non siding'],
+  ['plot_rent','plot rent'],
+  ['hmc','hmc charges'],
+  ['survey_draft','draft survey'],
+  ['survey_discharge','discharge point cargo analysis'],
+  ['survey_rake_loading','rake loading supervision'],
+  ['security','security charges'],
+  ['additional_shift','additional shifting'],
+  ['cargo_shift_ns','shifting charges'],      // mail "Shifting Charges @66/MT..." -> Excel "Cargo Shifting from non siding to siding" (per connector sheet)
+  ['mls_da_reimb','reimburement'],
+  ['mls_da_reimb','reimbursement'],
+  ['mls_da','mls port da'],
+  ['priority','priority charges'],
+  ['customs_cha','custom clearing'],
+  ['customs_cha','cha charges'],
+];
+
+function matchLabel(rawLabel){
+  const n = normKey(rawLabel);
+  if (!n) return null;
+  // mls_da vs mls_da_reimb: check reimb first
+  if (n.includes('mls port da') && (n.includes('reimb'))) return 'mls_da_reimb';
+  if (n.includes('mls port da')) return 'mls_da';
+  for (const [key, sub] of MATCHERS){
+    if (key.startsWith('mls_da')) continue; // handled above
+    if (n.includes(sub)) return key;
+  }
+  return null;
+}
+// store a parsed value, flagging anything that could be silently wrong
+function isRecognisedValue(raw){
+  const t = String(raw==null?'':raw).replace(/\u00a0/g,' ').trim();
+  return /^(n\/?a|-|—|nil)$/i.test(t) || /^₹?\s*-?[\d,]+(\.\d+)?\s*$/.test(t);
+}
+function recordValue(block, key, label, raw){
+  if (!isRecognisedValue(raw)){
+    block.issues.push('"'+label.trim()+'" has a value I could not read as a number ("'+String(raw==null?'':raw).trim()+'") — it was set to 0.');
+  }
+  const v = parseValue(raw);
+  if (block.values[key]!==undefined && block.values[key]!==v){
+    block.issues.push('"'+label.trim()+'" appears more than once in this block with different values ('+block.values[key]+' and '+v+') — the later one was used.');
+  }
+  block.values[key] = v;
+}
+function recordUnmapped(block, label, raw){
+  block.unmapped.push({label:label.trim(), raw:String(raw==null?'':raw).trim(), value:parseValue(raw)});
+}
+function isVesselLine(n){ return n.startsWith('vessel name'); }
+function isPoLine(n){ return n.startsWith('vessel po') || n.startsWith('vessel sto'); }
+function isBerthLine(n){ return n.startsWith('berth no'); }
+function isHeaderRow(n){ return n==='line item as in po' || n==='vendor code' || n==='amended po' || n==='line item as in  po'; }
+function isMetaLabel(n){ return n==='cargo' || n==='tonnage' || n==='material code'; }
+
+function parseValue(s){
+  if (s===undefined || s===null) return 0;
+  let t = String(s).replace(/\u00a0/g,' ').trim();
+  if (/^(n\/?a|-|—|nil)$/i.test(t)) return 0;
+  t = t.replace(/[₹,\s]/g,'');
+  const f = parseFloat(t);
+  return isNaN(f) ? 0 : f;
+}
+
+function newBlock(){
+  return {vessel:'', po:'', cargoType:'', cargo:'', tonnage:0, materialCode:'', values:{}, unmapped:[], issues:[]};
+}
+
+function isVendorCodeLine(s){ return s!==undefined && /^[A-Z0-9_ .]{2,14}$/.test(s) && !/[₹]/.test(s) && !/^\d+[.,]\d+$/.test(s); }
+function isValueLikeLine(s){
+  if (s===undefined) return false;
+  const t = s.replace(/\u00a0/g,' ').trim();
+  return /^(n\/?a|-|—|nil)$/i.test(t) || /^₹?\s*[\d,]+(\.\d+)?\s*$/.test(t);
+}
+
+/* ============================================================
+   1. PLAIN-TEXT PARSER (3-line label / vendor-code / value pattern)
+   ============================================================ */
+function parsePlainText(text){
+  const rawLines = text.split(/\r\n|\r|\n/).map(l=>l.replace(/\u00a0/g,' ').trim()).filter(l=>l.length>0);
+  const blocks = [];
+  let cur = null;
+  let i=0;
+  while(i<rawLines.length){
+    const raw = rawLines[i];
+    const n = norm(raw);
+    if (isVesselLine(n)){
+      if (cur) blocks.push(cur);
+      cur = newBlock();
+      const parts = raw.split(':');
+      cur.vessel = parts.length>1 ? parts.slice(1).join(':').trim() : raw;
+      i++; continue;
+    }
+    if (isPoLine(n)){
+      if (!cur) { cur = newBlock(); }
+      const poM = raw.match(/(\d{6,})/);
+      if (poM) cur.po = poM[1];
+      const cargoM = raw.match(/cargo\s*:\s*(.+)$/i);
+      if (cargoM) cur.cargoType = cargoM[1].trim();
+      i++; continue;
+    }
+    if (isBerthLine(n)){ i++; continue; }
+    if (isHeaderRow(n)){ i++; continue; }
+
+    if (cur){
+      const key = matchLabel(raw);
+      const isMeta = isMetaLabel(n);
+      // an unrecognised label counts as a charge line only if it's followed by the
+      // usual vendor-code / value shape — this is what lets a brand-new PO field
+      // (one we haven't seen before) get picked up instead of silently dropped
+      const looksLikeChargeLine = !key && !isMeta && isVendorCodeLine(rawLines[i+1]) && isValueLikeLine(rawLines[i+2]);
+      if (key || isMeta || looksLikeChargeLine){
+        // figure out vendor-code line vs value line
+        let vLine = rawLines[i+1];
+        let valLine;
+        if (isVendorCodeLine(vLine)){
+          valLine = rawLines[i+2];
+          i += 3;
+        } else {
+          valLine = vLine;
+          i += 2;
+        }
+        if (isMeta){
+          if (n==='cargo') cur.cargo = (valLine||'').trim();
+          else if (n==='tonnage') cur.tonnage = parseValue(valLine);
+          else if (n==='material code') cur.materialCode = (valLine||'').trim();
+        } else if (key){
+          recordValue(cur, key, raw, valLine);
+        } else if (looksLikeChargeLine){
+          recordUnmapped(cur, raw, valLine);
+        }
+        continue;
+      }
+    }
+    i++;
+  }
+  if (cur) blocks.push(cur);
+  return blocks.filter(b => Object.keys(b.values).length>0 || b.unmapped.length>0 || b.tonnage>0);
+}
+
+/* ============================================================
+   2. HTML-TABLE PARSER (for pasted rich text & mammoth docx output)
+   ============================================================ */
+function parseHtmlTables(html){
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const rows = Array.from(doc.querySelectorAll('tr'));
+  const blocks = [];
+  let cur = null;
+  for (const tr of rows){
+    const cells = Array.from(tr.querySelectorAll('td,th')).map(td => td.textContent.replace(/\u00a0/g,' ').trim());
+    const nonEmpty = cells.filter(c=>c.length>0);
+    if (nonEmpty.length===0) continue;
+
+    if (cells.length===1 || new Set(cells.filter(c=>c)).size===1){
+      const raw = nonEmpty[0];
+      const n = norm(raw);
+      if (isVesselLine(n)){
+        if (cur) blocks.push(cur);
+        cur = newBlock();
+        const parts = raw.split(':');
+        cur.vessel = parts.length>1 ? parts.slice(1).join(':').trim() : raw;
+        continue;
+      }
+      if (isPoLine(n)){
+        if (!cur) cur = newBlock();
+        const poM = raw.match(/(\d{6,})/);
+        if (poM) cur.po = poM[1];
+        const cargoM = raw.match(/cargo\s*:\s*(.+)$/i);
+        if (cargoM) cur.cargoType = cargoM[1].trim();
+        continue;
+      }
+      if (isBerthLine(n) || isHeaderRow(n)) continue;
+      continue;
+    }
+
+    if (cells.length>=3 && cur){
+      const label = cells[0], value = cells[cells.length-1];
+      const n = norm(label);
+      if (isHeaderRow(n)) continue;
+      const key = matchLabel(label);
+      const isMeta = isMetaLabel(n);
+      if (isMeta){
+        if (n==='cargo') cur.cargo = value;
+        else if (n==='tonnage') cur.tonnage = parseValue(value);
+        else if (n==='material code') cur.materialCode = value;
+      } else if (key){
+        recordValue(cur, key, label, value);
+      } else if (label){
+        // a PO line item with no mapping in the connector list — never drop it silently
+        recordUnmapped(cur, label, value);
+      }
+    }
+  }
+  if (cur) blocks.push(cur);
+  return blocks.filter(b => Object.keys(b.values).length>0 || b.unmapped.length>0 || b.tonnage>0);
+}
+
+function postProcessBlocks(blocks){
+  blocks.forEach(b=>{
+    let sum = 0, has=false;
+    let found = 0;
+    SURVEY_SUB.forEach(k=>{ if (b.values[k]!==undefined){ sum += b.values[k]; has=true; found++; delete b.values[k]; }});
+    if (has) b.values.survey_other = sum;
+    if (has && found<3) b.issues.push('Survey & Other Charges is the sum of 3 survey lines (Draft Survey + Discharge Point Cargo Analysis + Rake Loading Supervision) but only '+found+' of 3 were found in the mail — please check the total.');
+  });
+  return blocks;
+}
+
+/* ============================================================
+   3. .MSG (CFB / Outlook binary) READER — extracts plain-text body
+   ============================================================ */
+function readMsgBody(arrayBuffer){
+  const buf = new Uint8Array(arrayBuffer);
+  const dv = new DataView(arrayBuffer);
+  const u16=(o)=>dv.getUint16(o,true), u32=(o)=>dv.getUint32(o,true);
+  const sig = Array.from(buf.slice(0,8)).map(b=>b.toString(16).padStart(2,'0')).join('');
+  if (sig !== 'd0cf11e0a1b11ae1') throw new Error('Not a valid Outlook .msg (CFB) file.');
+
+  const sectorShift = u16(30), miniSectorShift = u16(32);
+  const numFatSectors = u32(44), firstDirSector = u32(48);
+  const miniStreamCutoff = u32(56), firstMiniFatSector = u32(60), numMiniFatSectors = u32(64);
+  const firstDifatSector = u32(68), numDifatSectors = u32(72);
+  const sectorSize = 1<<sectorShift, miniSectorSize = 1<<miniSectorShift;
+
+  let difat = [];
+  for (let i=0;i<109;i++) difat.push(u32(76+i*4));
+  let dsec = firstDifatSector, guard1=0;
+  while (dsec!==0xFFFFFFFE && dsec!==0xFFFFFFFF && numDifatSectors>0 && guard1<numDifatSectors+2){
+    const off = 512+dsec*sectorSize, per = sectorSize/4;
+    for (let i=0;i<per-1;i++) difat.push(u32(off+i*4));
+    dsec = u32(off+(per-1)*4);
+    guard1++;
+  }
+  difat = difat.filter(x=>x!==0xFFFFFFFF);
+
+  const fat = [];
+  for (const sec of difat){
+    const off = 512+sec*sectorSize, per = sectorSize/4;
+    for (let i=0;i<per;i++) fat.push(u32(off+i*4));
+  }
+  const secOff = (sec)=>512+sec*sectorSize;
+  function readChain(start){
+    const chunks=[]; let sec=start, guard=0;
+    while (sec!==0xFFFFFFFE && sec<0xFFFFFFFA){
+      const off=secOff(sec);
+      chunks.push(buf.slice(off, off+sectorSize));
+      sec = fat[sec];
+      if (++guard>300000) throw new Error('FAT chain loop');
+    }
+    const total = chunks.reduce((a,c)=>a+c.length,0);
+    const out = new Uint8Array(total); let p=0;
+    for (const c of chunks){ out.set(c,p); p+=c.length; }
+    return out;
+  }
+
+  const dirBuf = readChain(firstDirSector);
+  const ddv = new DataView(dirBuf.buffer, dirBuf.byteOffset, dirBuf.byteLength);
+  const numEntries = Math.floor(dirBuf.length/128);
+  const entries = [];
+  for (let i=0;i<numEntries;i++){
+    const base=i*128;
+    const nameLen = ddv.getUint16(base+64,true);
+    let name='';
+    if (nameLen>0){
+      const nameBytes = dirBuf.slice(base, base+nameLen-2);
+      const cps=[];
+      for (let j=0;j<nameBytes.length;j+=2) cps.push(nameBytes[j] | (nameBytes[j+1]<<8));
+      name = String.fromCharCode.apply(null, cps);
+    }
+    const objType = dirBuf[base+66];
+    const startSector = ddv.getUint32(base+116,true);
+    const size = ddv.getUint32(base+120,true);
+    entries.push({name, objType, startSector, size});
+  }
+
+  const root = entries.find(e=>e.objType===5);
+  if (!root) throw new Error('No root entry in .msg file.');
+  const rootStream = readChain(root.startSector);
+
+  let miniFat = [];
+  if (numMiniFatSectors>0){
+    const mfb = readChain(firstMiniFatSector);
+    const mdv = new DataView(mfb.buffer, mfb.byteOffset, mfb.byteLength);
+    for (let i=0;i<mfb.length/4;i++) miniFat.push(mdv.getUint32(i*4,true));
+  }
+  function readMiniChain(start,size){
+    const chunks=[]; let sec=start, guard=0;
+    while (sec!==0xFFFFFFFE && sec<0xFFFFFFFA){
+      const off=sec*miniSectorSize;
+      chunks.push(rootStream.slice(off, off+miniSectorSize));
+      sec = miniFat[sec];
+      if (++guard>300000) throw new Error('miniFAT loop');
+    }
+    const total = chunks.reduce((a,c)=>a+c.length,0);
+    const out = new Uint8Array(total); let p=0;
+    for (const c of chunks){ out.set(c,p); p+=c.length; }
+    return out.slice(0,size);
+  }
+  function readStream(entry){
+    return entry.size>=miniStreamCutoff ? readChain(entry.startSector).slice(0,entry.size) : readMiniChain(entry.startSector, entry.size);
+  }
+
+  const uni = entries.find(e=>e.name==='__substg1.0_1000001F');
+  const ascii = entries.find(e=>e.name==='__substg1.0_1000001E');
+  if (uni){
+    const data = readStream(uni);
+    const cps=[]; for (let j=0;j<data.length;j+=2) cps.push(data[j] | (data[j+1]<<8));
+    return String.fromCharCode.apply(null, cps);
+  } else if (ascii){
+    const data = readStream(ascii);
+    return String.fromCharCode.apply(null, data);
+  }
+  throw new Error('Could not find a text body stream in this .msg file.');
+}
+
+/* ============================================================
+   4. STATE + UI WIRING
+   ============================================================ */
+let ALL_BLOCKS = [];
+let SELECTED_BLOCK = null;
+let ACTIVE_ITEMS = LINE_ITEMS;
+let BUILT = null;
+
+let FLAGS = [];   // fields found in the mail that have no row in the sheet
+
+function computeFlags(block){
+  const flags = [];
+  (block.unmapped||[]).forEach(u=>flags.push({label:u.label, raw:u.raw, value:u.value, known:false, choice:''}));
+  Object.keys(KNOWN_NO_ROW).forEach(k=>{
+    if (block.values[k]!==undefined) flags.push({label:KNOWN_NO_ROW[k], raw:block.values[k]===0?'N/A':String(block.values[k]), value:block.values[k], known:true, choice:''});
+  });
+  flags.forEach((f,i)=>f.id=i);
+  return flags;
+}
+function esc(t){ return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function renderReview(block){
+  const box = $('reviewBox');
+  let html = '';
+  const needs = FLAGS.filter(f=>f.value!==0);
+  const zero = FLAGS.filter(f=>f.value===0);
+
+  if (needs.length){
+    const opts = LINE_ITEMS.filter(it=>!NOT_FROM_MAIL.includes(it.key) && it.key!=='survey_other')
+      .map(it=>'<option value="row:'+it.key+'">Add to row: '+esc(it.label.replace(/\u00a0/g,' ').trim())+'</option>').join('');
+    html += '<div class="msg err"><strong>'+needs.length+' field'+(needs.length>1?'s':'')+' in the mail ha'+(needs.length>1?'ve':'s')+' no row in the sheet and carry a value.</strong> '+
+      'They would be left out of the totals. Choose what to do with each one — the sheet can\'t be built until you do.'+
+      '<table class="flagtbl">'+needs.map(f=>
+        '<tr><td><strong>'+esc(f.label)+'</strong>'+(f.known?' <span class="tagk">known, no row</span>':' <span class="tagn">new</span>')+'<div class="note">mail value: '+esc(f.raw)+'</div></td>'+
+        '<td><select data-flag="'+f.id+'"><option value="">— choose —</option>'+opts+
+        '<option value="extra">Add as an extra row (adds a row to the standard layout)</option>'+
+        '<option value="ignore">Leave out — I understand it is not in the sheet</option></select></td></tr>'
+      ).join('')+'</table></div>';
+  }
+  if (block.issues && block.issues.length){
+    html += '<div class="msg warn"><strong>Please check:</strong><ul>'+block.issues.map(i=>'<li>'+esc(i)+'</li>').join('')+'</ul></div>';
+  }
+  if (zero.length){
+    html += '<div class="msg info">In the mail but with no row in the sheet (value N/A or 0, so nothing is lost): '+zero.map(f=>esc(f.label)).join('; ')+'.</div>';
+  }
+  const missing = LINE_ITEMS.filter(it=>!NOT_FROM_MAIL.includes(it.key) && block.values[it.key]===undefined);
+  if (missing.length){
+    html += '<div class="msg info">Rows with no matching line in this mail (left at the default shown below — fill in if needed): '+missing.map(it=>esc(it.label.replace(/\u00a0/g,' ').trim())).join('; ')+'.</div>';
+  }
+  if (!needs.length && !(block.issues&&block.issues.length)){
+    html = '<div class="msg ok">Every line in the mail is connected to a row in the sheet — nothing new or unmatched.</div>' + html;
+  }
+  box.innerHTML = html;
+  box.querySelectorAll('select[data-flag]').forEach(sel=>{
+    sel.addEventListener('change', ()=>{ FLAGS[+sel.dataset.flag].choice = sel.value; });
+  });
+}
+
+const $ = (id)=>document.getElementById(id);
+
+function showMsg(text, type){
+  const box = $('parseMsgBox');
+  box.innerHTML = '<div class="msg '+(type==='err'?'err':'ok')+'">'+text+'</div>';
+}
+
+// tabs
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.tab-body').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    $('tab-'+btn.dataset.tab).classList.add('active');
+  });
+});
+
+// paste zone placeholder behaviour
+const pasteZone = $('pasteZone');
+pasteZone.addEventListener('focus', ()=>{ if (pasteZone.dataset.placeholder){ pasteZone.textContent=''; pasteZone.removeAttribute('data-placeholder'); }});
+$('clearPasteBtn').addEventListener('click', ()=>{ pasteZone.innerHTML=''; pasteZone.dataset.placeholder='true'; pasteZone.textContent='Select the PO confirmation in Outlook or Word (including the Vessel Name / Line-Item table), copy it, then click here and paste (Ctrl+V). Table formatting is kept automatically.'; });
+
+$('parsePasteBtn').addEventListener('click', ()=>{
+  const html = pasteZone.innerHTML;
+  const text = pasteZone.textContent;
+  if (!text || pasteZone.dataset.placeholder){ showMsg('Paste something first.', 'err'); return; }
+  try{
+    let blocks = html.includes('<table') ? parseHtmlTables(html) : parsePlainText(text);
+    if (blocks.length===0) blocks = parsePlainText(text);
+    finishParse(blocks, 'pasted text');
+  }catch(e){ showMsg('Could not read that: '+e.message, 'err'); }
+});
+
+// docx upload
+function wireDrop(dropId, inputId, handler){
+  const drop=$(dropId), input=$(inputId);
+  drop.addEventListener('click', ()=>input.click());
+  drop.addEventListener('dragover', e=>{e.preventDefault(); drop.classList.add('drag');});
+  drop.addEventListener('dragleave', ()=>drop.classList.remove('drag'));
+  drop.addEventListener('drop', e=>{
+    e.preventDefault(); drop.classList.remove('drag');
+    if (e.dataTransfer.files.length) { input.files = e.dataTransfer.files; handler(e.dataTransfer.files[0]); }
+  });
+  input.addEventListener('change', ()=>{ if (input.files.length) handler(input.files[0]); });
+}
+
+wireDrop('dropDocx','fileDocx', async (file)=>{
+  $('docxName').textContent = file.name;
+  try{
+    const buf = await file.arrayBuffer();
+    const result = await mammoth.convertToHtml({arrayBuffer: buf});
+    let blocks = parseHtmlTables(result.value);
+    if (blocks.length===0){
+      const raw = await mammoth.extractRawText({arrayBuffer: buf});
+      blocks = parsePlainText(raw.value);
+    }
+    finishParse(blocks, file.name);
+  }catch(e){ showMsg('Could not read that .docx: '+e.message, 'err'); }
+});
+
+wireDrop('dropMsg','fileMsg', async (file)=>{
+  $('msgName').textContent = file.name;
+  try{
+    const buf = await file.arrayBuffer();
+    const body = readMsgBody(buf);
+    const blocks = parsePlainText(body);
+    finishParse(blocks, file.name);
+  }catch(e){ showMsg('Could not read that .msg (' + e.message + '). Try "Paste email" instead — select the mail body in Outlook and paste it there.', 'err'); }
+});
+
+function finishParse(blocks, sourceLabel){
+  blocks = postProcessBlocks(blocks);
+  if (blocks.length===0){
+    showMsg('No line-item charges were recognised in '+sourceLabel+'. Try pasting the email text directly, or check the file has the "Vessel Name / Line Item / Vendor Code / Amended PO" table.', 'err');
+    return;
+  }
+  ALL_BLOCKS = blocks;
+  showMsg('Found '+blocks.length+' cargo block'+(blocks.length>1?'s':'')+' in '+sourceLabel+'.', 'ok');
+  if (blocks.length>1){
+    renderBlockPicker(blocks);
+  } else {
+    selectBlock(blocks[0]);
+  }
+}
+
+function renderBlockPicker(blocks){
+  $('blockPickerSection').style.display='';
+  const el = $('blockPicker');
+  el.innerHTML='';
+  blocks.forEach((b,idx)=>{
+    const div = document.createElement('div');
+    div.className='block-opt';
+    const lineCount = Object.keys(b.values).length + b.unmapped.length;
+    div.innerHTML = '<input type="radio" name="blockPick" '+(idx===0?'checked':'')+'>'+
+      '<div><div class="t">'+(b.vessel||'Vessel block '+(idx+1))+' — '+(b.cargoType||b.cargo||'cargo n/a')+'</div>'+
+      '<div class="d">PO '+(b.po||'—')+' · Tonnage '+(b.tonnage? b.tonnage.toLocaleString('en-IN'):'—')+' · '+lineCount+' charge lines</div></div>';
+    div.addEventListener('click', ()=>{
+      el.querySelectorAll('.block-opt').forEach(o=>o.classList.remove('sel'));
+      el.querySelectorAll('input[type=radio]').forEach(r=>r.checked=false);
+      div.classList.add('sel'); div.querySelector('input').checked=true;
+      selectBlock(b);
+    });
+    if (idx===0) div.classList.add('sel');
+    el.appendChild(div);
+  });
+  selectBlock(blocks[0]);
+}
+
+function selectBlock(block){
+  SELECTED_BLOCK = block;
+  ACTIVE_ITEMS = LINE_ITEMS;
+  FLAGS = computeFlags(block);
+  $('cfgVessel').value = block.vessel ? ('MV '+block.vessel.replace(/^mv\.?\s*/i,'')) : $('cfgVessel').value;
+  renderChargesTable(block);
+  renderReview(block);
+  $('step2Section').style.display='';
+  $('statusTag').textContent='step 2 of 3';
+  $('step2Section').scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+function renderChargesTable(block){
+  const tbody = $('chargesBody');
+  tbody.innerHTML='';
+  ACTIVE_ITEMS.forEach((item,idx)=>{
+    let val, srcClass, srcLabel;
+    if (item.key==='survey_other'){
+      val = block.values['survey_other'] !== undefined ? block.values['survey_other'] : item.dflt;
+      srcClass='computed'; srcLabel='survey sum';
+    } else if (item.key==='haulage_siding_terminal'){
+      val = 0; srcClass='computed'; srcLabel='auto';
+    } else if (block.values[item.key] !== undefined){
+      val = block.values[item.key]; srcClass='matched'; srcLabel='from PO';
+    } else {
+      val = item.dflt; srcClass='manual'; srcLabel='manual';
+    }
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td>'+(idx+1)+'</td><td>'+item.label+'</td><td class="unit">'+item.unit+'</td>'+
+      '<td><input type="number" step="0.01" id="rate_'+item.key+'" value="'+val+'" '+(item.key==='haulage_siding_terminal'?'disabled title="computed from Siding / Haulage / Terminal basis below"':'')+'></td>'+
+      '<td class="src '+srcClass+'">'+srcLabel+'</td>';
+    tbody.appendChild(tr);
+  });
+}
+
+/* ============================================================
+   5. BUILD SHEET
+   ============================================================ */
+$('buildBtn').addEventListener('click', ()=>{
+  $('buildMsgBox').innerHTML='';
+  const rakesRaw = $('cfgRakes').value.trim();
+  const rakesNum = parseFloat(rakesRaw);
+  if (!rakesRaw || isNaN(rakesNum) || rakesNum<=0){
+    $('buildMsgBox').innerHTML = '<div class="msg err">Enter how many rakes are planned — this isn\'t filled in for you.</div>';
+    $('cfgRakes').focus();
+    return;
+  }
+
+  const unresolved = FLAGS.filter(f=>f.value!==0 && !f.choice);
+  if (unresolved.length){
+    $('buildMsgBox').innerHTML = '<div class="msg err">Not built yet — decide what to do with: <strong>'+unresolved.map(f=>esc(f.label)).join('; ')+'</strong> (see the red box at the top of this step).</div>';
+    $('reviewBox').scrollIntoView({behavior:'smooth', block:'center'});
+    return;
+  }
+
+  const cfg = {
+    vessel: $('cfgVessel').value.trim() || 'MV Vessel',
+    sheet: ($('cfgSheet').value.trim() || 'SHEET').slice(0,31),
+    rakes: rakesNum,
+    gst: parseFloat($('cfgGst').value)||0,
+    tonnage: parseFloat($('cfgTonnage').value)||0,
+    boxes: parseFloat($('cfgBoxes').value)||0,
+    siding: parseFloat($('cfgSiding').value)||0,
+    haulage: parseFloat($('cfgHaulage').value)||0,
+    terminal: parseFloat($('cfgTerminal').value)||0,
+  };
+  cfg.basisNote = 'Basis ' + cfg.rakes + (cfg.rakes===1 ? ' Rake' : ' Rakes');
+
+  const rates = {};
+  LINE_ITEMS.forEach(item=>{ rates[item.key] = parseFloat($('rate_'+item.key).value)||0; });
+
+  // apply the user's decisions on fields that have no row of their own
+  const handled = [];
+  const items = LINE_ITEMS.slice();
+  FLAGS.filter(f=>f.value!==0).forEach(f=>{
+    if (f.choice.startsWith('row:')){
+      const key = f.choice.slice(4);
+      rates[key] = (rates[key]||0) + f.value;
+      const it = LINE_ITEMS.find(x=>x.key===key);
+      handled.push('"'+f.label+'" (₹'+f.value+'/Mt) was added into the row "'+it.label.replace(/\u00a0/g,' ').trim()+'".');
+    } else if (f.choice==='extra'){
+      const key = 'extra_'+f.id;
+      rates[key] = f.value;
+      items.splice(items.findIndex(x=>x.key==='application_fee'), 0, {key, label:f.label, unit:'Rs/Mt'});
+      handled.push('"'+f.label+'" (₹'+f.value+'/Mt) was added as an extra row — the sheet now has more rows than the standard layout.');
+    } else if (f.choice==='ignore'){
+      handled.push('"'+f.label+'" (₹'+f.value+'/Mt) was left out of the sheet, as you chose.');
+    }
+  });
+
+  const tentativeQty = cfg.tonnage * cfg.rakes;
+  const sidingCharges = cfg.tonnage * cfg.siding;
+  const haulageCharges = cfg.boxes * cfg.haulage;
+  const terminalCharges = cfg.tonnage * cfg.terminal;
+  const totalHST = sidingCharges + haulageCharges + terminalCharges;
+  const gstOnHST = totalHST * cfg.gst/100;
+  const totalChargesB = totalHST + gstOnHST;
+  rates.haulage_siding_terminal = cfg.tonnage>0 ? totalHST / cfg.tonnage : 0;
+
+  const rows = items.map((item,idx)=>{
+    const qty = item.key==='application_fee' ? cfg.rakes : tentativeQty;
+    const rate = rates[item.key];
+    const cost = rate*qty;
+    const gst = cost*cfg.gst/100;
+    const total = cost+gst;
+    return {sr:idx+1, label:item.label, unit:item.unit, rate, qty, cost, gst, total};
+  });
+  const grandTotal = rows.reduce((a,r)=>a+r.total,0);
+
+  BUILT = {cfg, rows, grandTotal, tentativeQty, sidingCharges, haulageCharges, terminalCharges, totalHST, gstOnHST, totalChargesB, handled, issues: block_issues()};
+  renderPreview(BUILT);
+  $('step3Section').style.display='';
+  $('statusTag').textContent='step 3 of 3';
+  $('step3Section').scrollIntoView({behavior:'smooth', block:'start'});
+});
+
+const inr = (n)=> '₹ ' + (Math.round(n*100)/100).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+function block_issues(){ return (SELECTED_BLOCK && SELECTED_BLOCK.issues) ? SELECTED_BLOCK.issues.slice() : []; }
+
+function renderPreview(built){
+  const hb = $('handledBox');
+  let hh = '';
+  if (built.handled.length) hh += '<div class="msg warn"><strong>Decisions applied to this sheet:</strong><ul>'+built.handled.map(h=>'<li>'+esc(h)+'</li>').join('')+'</ul></div>';
+  if (built.issues.length) hh += '<div class="msg warn"><strong>Still worth checking:</strong><ul>'+built.issues.map(h=>'<li>'+esc(h)+'</li>').join('')+'</ul></div>';
+  hb.innerHTML = hh;
+  $('grandTotalTag').textContent = 'grand total ' + inr(built.grandTotal);
+  const t = $('previewTable');
+  let html = '<tr><th>Sr</th><th>Line Item</th><th>Unit</th><th>Rs/Mt</th><th>Qty</th><th>Cost</th><th>GST</th><th>Total</th></tr>';
+  built.rows.forEach(r=>{
+    html += '<tr><td>'+r.sr+'</td><td>'+r.label+'</td><td>'+r.unit+'</td><td class="num">'+inr(r.rate)+'</td><td class="num">'+r.qty.toLocaleString('en-IN')+'</td><td class="num">'+inr(r.cost)+'</td><td class="num">'+inr(r.gst)+'</td><td class="num">'+inr(r.total)+'</td></tr>';
+  });
+  html += '<tr class="total"><td colspan="7" style="text-align:right;">Total</td><td class="num">'+inr(built.grandTotal)+'</td></tr>';
+  t.innerHTML = html;
+}
+
+$('backBtn').addEventListener('click', ()=>{
+  $('step2Section').scrollIntoView({behavior:'smooth', block:'start'});
+});
+
+/* ============================================================
+   6. EXCEL EXPORT — same layout, borders and fonts as the supplied
+      sample, with live formulas (cached results included)
+   ============================================================ */
+function buildWorkbook(built){
+  const {cfg, rows, grandTotal, sidingCharges, haulageCharges, terminalCharges, totalHST, gstOnHST, totalChargesB} = built;
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet((cfg.sheet||'Sheet1').replace(/[\\\/\?\*\[\]:]/g,' ').slice(0,31));
+  const curFmt = '_ "₹"\\ * #,##0.00_ ;_ "₹"\\ * \\-#,##0.00_ ;_ "₹"\\ * "-"??_ ;_ @_ ';
+  const acctFmt = '_(* #,##0_);_(* \\(#,##0\\);_(* "-"??_);_(@_)';
+  const totFmt = '_ * #,##0_ ;_ * \\-#,##0_ ;_ * "-"??_ ;_ @_ ';
+  const T = {style:'thin'};
+  const box = {top:T,left:T,bottom:T,right:T};
+  const font = (bold,size)=>({name:'Calibri', size:size||11, bold:!!bold});
+  const ctr = {horizontal:'center', vertical:'center'};
+
+  [9,39.7,15.1,14.5,24,15.5,14.5,15.5].forEach((w,i)=>{ ws.getColumn(i+1).width = w; });
+
+  function put(addr, value, o){
+    const c = ws.getCell(addr);
+    c.value = value;
+    c.font = font(o&&o.bold, o&&o.size);
+    if (o&&o.align) c.alignment = o.align;
+    if (o&&o.fmt) c.numFmt = o.fmt;
+    if (!o || o.border!==false) c.border = (o&&o.border) || box;
+    return c;
+  }
+  const f = (formula, result)=>({formula, result});
+
+  // title
+  ws.mergeCells('B1:H2');
+  put('B1', cfg.vessel, {bold:true, size:12, align:ctr, border:{top:T,left:T}});
+  ['C1','D1','E1','F1','G1','H1'].forEach(a=>{ ws.getCell(a).border = {top:T}; });
+  ws.getCell('H1').border = {top:T,right:T};
+  ['B2','C2','D2','E2','F2','G2'].forEach(a=>{ ws.getCell(a).border = {bottom:T}; });
+  ws.getCell('B2').border = {left:T,bottom:T};
+  ws.getCell('H2').border = {right:T,bottom:T};
+
+  // header row
+  ws.getRow(3).height = 28.8;
+  const headers = ['Sr.No','Line Item','','Rs/Mt','Tentative QTY ('+cfg.rakes+'  Rakes)','Cost','GST @'+cfg.gst+'%','Total Cost'];
+  'ABCDEFGH'.split('').forEach((col,i)=>{
+    put(col+'3', headers[i]===''?null:headers[i], {bold:true, align:{horizontal:'center', vertical:'center', wrapText:true}});
+  });
+
+  const n = rows.length;
+  const lastRow = 3+n, totalRow = lastRow+1;
+  const hdrRow = lastRow+3, dataRow = hdrRow+1, hstRow = dataRow+1, gstRow = dataRow+3, totRow = dataRow+5, basisRow = dataRow+6;
+
+  rows.forEach((r,i)=>{
+    const row = 4+i;
+    put('A'+row, r.sr, {align:{horizontal:'center'}});
+    put('B'+row, r.label, {align:{horizontal:'center'}});
+    put('C'+row, r.unit, {align:{horizontal:'center'}});
+    if (r.unit==='Per Rake') put('D'+row, f('E'+hstRow+'/B'+dataRow, r.rate), {fmt:curFmt});
+    else put('D'+row, r.rate, {fmt:curFmt});
+    if (r.unit==='Per Application') put('E'+row, r.qty, {align:{horizontal:'center'}});
+    else put('E'+row, f('$B$'+dataRow+'*'+cfg.rakes, r.qty), {align:{horizontal:'center'}});
+    put('F'+row, f('D'+row+'*E'+row, r.cost), {fmt:curFmt});
+    put('G'+row, f('F'+row+'*'+cfg.gst+'%', r.gst), {fmt:curFmt});
+    put('H'+row, f('F'+row+'+G'+row, r.total), {fmt:curFmt});
+  });
+
+  // grand total
+  put('F'+totalRow, 'Total', {bold:true, align:{horizontal:'center'}, border:false});
+  put('G'+totalRow, f('SUM(H4:H'+lastRow+')', grandTotal), {bold:true, fmt:totFmt, border:{left:T,right:T,bottom:T}});
+
+  // HST calculator block
+  ws.getRow(hdrRow).height = 30;
+  put('A'+hdrRow, 'No of Boxes', {bold:true, align:{horizontal:'center', vertical:'center', wrapText:true}});
+  put('B'+hdrRow, 'Rake Tonnage (Apprx.)', {bold:true, align:{vertical:'center'}});
+  put('C'+hdrRow, 'Siding Chgs.', {bold:true, align:{vertical:'center'}});
+  put('D'+hdrRow, 'Haulage Chgs.', {bold:true, align:{vertical:'center'}});
+  put('E'+hdrRow, 'Terminal Chgs.', {bold:true, align:{vertical:'center'}});
+  put('A'+dataRow, cfg.boxes, {align:{horizontal:'center'}});
+  put('B'+dataRow, cfg.tonnage);
+  put('C'+dataRow, f('B'+dataRow+'*'+cfg.siding, sidingCharges), {fmt:acctFmt});
+  put('D'+dataRow, f('A'+dataRow+'*'+cfg.haulage, haulageCharges), {fmt:acctFmt});
+  put('E'+dataRow, f('B'+dataRow+'*'+cfg.terminal, terminalCharges), {fmt:acctFmt});
+
+  function labelled(row, label, value, bold){
+    ws.mergeCells('C'+row+':D'+row);
+    put('C'+row, label, {bold:true, align:{horizontal:'center'}});
+    ws.getCell('D'+row).border = box;
+    put('E'+row, value, {bold:bold, fmt:acctFmt});
+  }
+  labelled(hstRow, 'Total HST Charges', f('SUM(C'+dataRow+':E'+dataRow+')', totalHST), false);
+  labelled(gstRow, 'GST @ '+cfg.gst+'%', f('E'+hstRow+'*'+cfg.gst+'%', gstOnHST), false);
+  labelled(totRow, 'Total charges (B)', f('E'+hstRow+'+E'+gstRow, totalChargesB), true);
+
+  put('A'+basisRow, cfg.basisNote, {align:{horizontal:'left'}, border:false});
+  return wb;
+}
+
+async function doDownload(){
+  if (!BUILT) return;
+  const wb = buildWorkbook(BUILT);
+  const fname = ('Sale_of_'+BUILT.cfg.vessel).replace(/[^a-z0-9]+/gi,'_') + '.xlsx';
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+
+  // On a published claude.ai page plain anchor downloads are blocked, so use the
+  // platform downloads capability when present; otherwise (page saved and opened
+  // locally) fall back to an ordinary browser download.
+  let handled = false;
+  if (window.claude && typeof window.claude.use === 'function'){
+    try{
+      const downloads = await window.claude.use('downloads');
+      if (downloads){ await downloads.save({filename: fname, data: blob}); handled = true; }
+    }catch(e){
+      if (e && e.code==='declined') handled = true;   // user said no — don't also force a download
+    }
+  }
+  if (!handled){
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = fname;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 2000);
+  }
+}
+$('downloadBtn').addEventListener('click', doDownload);
+
+})();
+</script>
+</body>
+</html>
